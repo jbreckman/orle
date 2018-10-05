@@ -45,7 +45,7 @@ t.test('performance', {autoend: true}, t => {
     startTime = new Date().getTime(); 
     let decoded = orle.decode(encoded);
     duration = new Date().getTime() - startTime;
-    t.true(duration < maxDecodeTime, `faster than ${maxDecodeTime}ms to decode ${arr.length} (${duration}ms)`);
+    t.true(duration < maxDecodeTime, `faster than ${maxDecodeTime}ms to decode ${arr.length} (${duration}ms) with ${(1-(encoded.length/decoded.buffer.byteLength))*100}% compression`);
 
     t.same(decoded.length, arr.length, 'lengths match');
     // it's too slow to check every value, so check 10 values
@@ -59,5 +59,6 @@ t.test('performance', {autoend: true}, t => {
   t.test('very large encoding/decoding known data format', async t => timeTestData(t, new Uint32Array(buildTestData(1000, 5000, 500)), 150, 50));
   t.test('very large mostly long runs', async t => timeTestData(t, new Uint32Array(buildTestData(100, 50000, 0)), 150, 50));
   t.test('medium mostly long runs', async t => timeTestData(t, new Uint32Array(buildTestData(100, 500, 50)), 10, 10));
+  t.test('pathological case', async t => timeTestData(t, new Uint32Array(buildTestData(10000, 2, 3)), 100, 400));
 
 });
