@@ -10,6 +10,6 @@
     "bluebird": "~3.5.2",
     "tap": "~10.3.2"
   },
-  "author": "",
+  "author": "Josh Breckman",
   "license": "ISC"
 }
