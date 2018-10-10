@@ -1,5 +1,8 @@
 const StringArray = require('./stringArray');
+const vm = require('vm');
 const DATA_TYPE_LOOKUP = [ Int32Array, Int16Array, Int8Array, Uint32Array, Uint16Array, Uint8Array, Float32Array, Float64Array, StringArray ];
+const ENCODE_OPTIMIZATION_FN = [];
+const DECODE_OPTIMIZATION_FN = [];
 const TYPED_ARRAY = Int32Array.__proto__;
 
 function inferArrayType(arr) {
@@ -40,13 +43,11 @@ function inferArrayType(arr) {
   }
 }
 
-module.exports = {
-  encode: (arr)  => {
-    let ResultType = inferArrayType(arr);
-    
+function encode() {
+  return (arr, ResultType, resultTypeIndex) => {
     let result = [];
     result.push(new Int32Array([arr.length]));
-    result.push(new Int8Array([DATA_TYPE_LOOKUP.indexOf(ResultType)]));
+    result.push(new Int8Array([resultTypeIndex]));
 
     for (var i = 0; i < arr.length; i++) {
       // check to see if this is a run
@@ -80,10 +81,13 @@ module.exports = {
     }
 
     return Buffer.concat(result.map(d => Buffer.from(d.buffer)));
-  },
-  decode: (buffer) => {
+  };
+}
+
+function decode() {
+  return (buffer, ArrayType, arrayTypeIndex) => {
     var length = buffer.readInt32LE(0),
-        ArrayType = DATA_TYPE_LOOKUP[buffer.readUInt8(4)];
+        bytesPerElement = ArrayType.BYTES_PER_ELEMENT;
 
     buffer = buffer.slice(5);
     var ind = 0,
@@ -100,7 +104,7 @@ module.exports = {
       }
 
       let arr = new ArrayType(new Uint8Array(buffer.slice(ind)).buffer, 0, toRead);
-      ind += arr.bytes || (arr.BYTES_PER_ELEMENT * arr.length);
+      ind += arr.bytes || (bytesPerElement * arr.length);
 
       if (counter > 0) {
         let currentValue = arr[0],
@@ -120,5 +124,30 @@ module.exports = {
     }    
     
     return result;
+  };
+}
+
+module.exports = {
+  encode: (arr)  => {
+    let ResultType = inferArrayType(arr),
+        resultTypeIndex = DATA_TYPE_LOOKUP.indexOf(ResultType);
+    
+    let fn = ENCODE_OPTIMIZATION_FN[resultTypeIndex];
+    if (!fn) {
+      fn = ENCODE_OPTIMIZATION_FN[resultTypeIndex] = vm.runInThisContext(`(${encode.toString()})()`);
+    }
+
+    return fn(arr, ResultType, resultTypeIndex);
+  },
+  decode: (buffer) => {
+    var arrayTypeIndex = buffer.readUInt8(4),
+        ArrayType = DATA_TYPE_LOOKUP[arrayTypeIndex];
+
+    let fn = DECODE_OPTIMIZATION_FN[arrayTypeIndex];
+    if (!fn) {
+      fn = DECODE_OPTIMIZATION_FN[arrayTypeIndex] = vm.runInThisContext(`(${decode.toString()})()`);
+    }
+
+    return fn(buffer, ArrayType, arrayTypeIndex);
   }
 };

@@ -1,10 +1,10 @@
 {
   "name": "orle",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "RLE array encoder/decoder",
   "main": "index.js",
   "scripts": {
-    "test": "tap test.js -Rspec --coverage-report=html --no-browser"
+    "test": "tap test.js -Rspec --no-browser"
   },
   "devDependencies": {
     "bluebird": "~3.5.2",
