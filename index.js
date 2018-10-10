@@ -132,6 +132,10 @@ module.exports = {
     let ResultType = inferArrayType(arr),
         resultTypeIndex = DATA_TYPE_LOOKUP.indexOf(ResultType);
     
+    // v8 optimization does quite poorly if different array types
+    // are used for the same execution of the same function.
+    // this forces v8 to treat each array type as a separately
+    // optimized function
     let fn = ENCODE_OPTIMIZATION_FN[resultTypeIndex];
     if (!fn) {
       fn = ENCODE_OPTIMIZATION_FN[resultTypeIndex] = vm.runInThisContext(`(${encode.toString()})()`);
@@ -143,6 +147,10 @@ module.exports = {
     var arrayTypeIndex = buffer.readUInt8(4),
         ArrayType = DATA_TYPE_LOOKUP[arrayTypeIndex];
 
+    // v8 optimization does quite poorly if different array types
+    // are used for the same execution of the same function.
+    // this forces v8 to treat each array type as a separately
+    // optimized function
     let fn = DECODE_OPTIMIZATION_FN[arrayTypeIndex];
     if (!fn) {
       fn = DECODE_OPTIMIZATION_FN[arrayTypeIndex] = vm.runInThisContext(`(${decode.toString()})()`);
