@@ -1,4 +1,5 @@
-const DATA_TYPE_LOOKUP = [ Int32Array, Int16Array, Int8Array, Uint32Array, Uint16Array, Uint8Array, Float32Array, Float64Array ];
+const StringArray = require('./stringArray');
+const DATA_TYPE_LOOKUP = [ Int32Array, Int16Array, Int8Array, Uint32Array, Uint16Array, Uint8Array, Float32Array, Float64Array, StringArray ];
 const TYPED_ARRAY = Int32Array.__proto__;
 
 function inferArrayType(arr) {
@@ -8,6 +9,7 @@ function inferArrayType(arr) {
 
   let hasNegative = false,
       hasDecimal = false,
+      hasString = false,
       largest = 0,
       smallest = 0;
 
@@ -15,10 +17,14 @@ function inferArrayType(arr) {
     let v = arr[i];
     if (!hasNegative && v < 0) hasNegative = true;
     if (!hasDecimal && !Number.isInteger(v)) hasDecimal = true;
+    if (!hasString && typeof v === 'string') hasString = true;
     if (v > largest) largest = v;
     if (v < smallest) smallest = v;
   }
 
+  if (hasString) {
+    return StringArray;
+  }
   if (hasDecimal) {
     return Float64Array;
   }
@@ -77,8 +83,7 @@ module.exports = {
   },
   decode: (buffer) => {
     var length = buffer.readInt32LE(0),
-        ArrayType = DATA_TYPE_LOOKUP[buffer.readUInt8(4)],
-        bytesPerElement = ArrayType.BYTES_PER_ELEMENT;
+        ArrayType = DATA_TYPE_LOOKUP[buffer.readUInt8(4)];
 
     buffer = buffer.slice(5);
     var ind = 0,
@@ -95,7 +100,7 @@ module.exports = {
       }
 
       let arr = new ArrayType(new Uint8Array(buffer.slice(ind)).buffer, 0, toRead);
-      ind += toRead * bytesPerElement;
+      ind += arr.bytes || (arr.BYTES_PER_ELEMENT * arr.length);
 
       if (counter > 0) {
         let currentValue = arr[0],

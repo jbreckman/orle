@@ -1,31 +1,61 @@
 const t = require('tap');
 const orle = require('./index');
 
-t.test('encode/decode', {autoend: true}, t => {
+t.test('encode/decode', t => {
 
   function confirm(t, arr, itemCount, itemSize, transitions) {
     var encoded = orle.encode(arr);
     var expectedSize = 5 + itemCount*itemSize + transitions*4;
     t.same(encoded.length, expectedSize, 'correct size');
     t.same([...orle.decode(encoded)], [...arr], 'correct values');
+    t.end();
   }
 
-  t.test('test uint8', async t => confirm(t, [1,2,3,4,5,255], 6, 1, 1));
-  t.test('test int8', async t => confirm(t, [1,2,3,4,5,-100], 6, 1, 1));
-  t.test('test uint16', async t => confirm(t, [1,2,3,4,5,256], 6, 2, 1));
-  t.test('test int16', async t => confirm(t, [1,2,3,4,5,-129], 6, 2, 1));
-  t.test('test uint32', async t => confirm(t, [1,2,3,4,5,65536], 6, 4, 1));
-  t.test('test int32', async t => confirm(t, [1,2,3,4,5,-32769], 6, 4, 1));
-  t.test('test float64', async t => confirm(t, [1,2,3,4,5,200.5], 6, 8, 1));
-  t.test('one big run', async t => confirm(t, [1,1,1,1,1,1,1], 1, 1, 1));
-  t.test('empty array', async t => confirm(t, [], 0, 0, 0));
-  t.test('one big run with odd number at end', async t => confirm(t, [1,1,1,1,1,1,2], 2, 1, 2));
-  t.test('run, mix, run', async t => confirm(t, [1,1,1,1,1,1,2,3,4,5,2,2,2,2,2,2,2], 6, 1, 3));
-  t.test('typed arrays', async t => confirm(t, new Int32Array([1,1,1,1,1,1,2,3,4,5,2,2,2,2,2,2,2]), 6, 4, 3));
-  t.test('unsigned typed arrays', async t => confirm(t, new Uint32Array([1,1,1,1,1,1,2,3,4,5,2,2,2,2,2,2,2]), 6, 4, 3));
+  t.test('test uint8', t => confirm(t, [1,2,3,4,5,255], 6, 1, 1));
+  t.test('test int8', t => confirm(t, [1,2,3,4,5,-100], 6, 1, 1));
+  t.test('test uint16', t => confirm(t, [1,2,3,4,5,256], 6, 2, 1));
+  t.test('test int16', t => confirm(t, [1,2,3,4,5,-129], 6, 2, 1));
+  t.test('test uint32', t => confirm(t, [1,2,3,4,5,65536], 6, 4, 1));
+  t.test('test int32', t => confirm(t, [1,2,3,4,5,-32769], 6, 4, 1));
+  t.test('test float64', t => confirm(t, [1,2,3,4,5,200.5], 6, 8, 1));
+  t.test('one big run', t => confirm(t, [1,1,1,1,1,1,1], 1, 1, 1));
+  t.test('empty array', t => confirm(t, [], 0, 0, 0));
+  t.test('one big run with odd number at end', t => confirm(t, [1,1,1,1,1,1,2], 2, 1, 2));
+  t.test('run, mix, run', t => confirm(t, [1,1,1,1,1,1,2,3,4,5,2,2,2,2,2,2,2], 6, 1, 3));
+  t.test('typed arrays', t => confirm(t, new Int32Array([1,1,1,1,1,1,2,3,4,5,2,2,2,2,2,2,2]), 6, 4, 3));
+  t.test('unsigned typed arrays', t => confirm(t, new Uint32Array([1,1,1,1,1,1,2,3,4,5,2,2,2,2,2,2,2]), 6, 4, 3));
+  t.end();
 });
 
-t.test('performance', {autoend: true}, t => {
+t.test('string encode/decode', t => {
+
+  function confirm(t, arr, itemCount, totalItemSize, transitions) {
+    var encoded = orle.encode(arr);
+    var expectedSize = 5 + itemCount*4 + totalItemSize + transitions*4;
+    t.same(encoded.length, expectedSize, 'correct size');
+    t.same([...orle.decode(encoded)], [...arr], 'correct values');
+    t.end();
+  }
+
+  const S1 = 'how are you',
+        S1_LENGTH = S1.length,
+        S2 = 'i am good',
+        S2_LENGTH = S2.length,
+        S3 = 'test',
+        S3_LENGTH = S3.length,
+        S4 = '',
+        S4_LENGTH = S4.length;
+
+  t.test('single run', t => confirm(t, [S2, S2, S2], 1, S2_LENGTH, 1));
+  t.test('non-uniform run', t => confirm(t, [S1, S2, S3], 3, S1_LENGTH + S2_LENGTH + S3_LENGTH, 1));
+  t.test('test basic strings', t => confirm(t, [S1, S2, S2, S2], 2, S1_LENGTH + S2_LENGTH, 2));
+  t.test('empty strings', t => confirm(t, [S4, S4, S4], 1, S4_LENGTH, 1));
+  t.test('non-uniform run with empty string', t => confirm(t, [S1, S2, S3, S4], 4, S1_LENGTH + S2_LENGTH + S3_LENGTH, 1));
+  t.test('run then non-uniform', t => confirm(t, [S3, S3, S3, S3, S1, S2, S3, S4, S3, S3, S3,], 6, S1_LENGTH + S2_LENGTH + S3_LENGTH + S3_LENGTH + S3_LENGTH, 3));
+  t.end();
+});
+
+t.test('performance', t => {
 
   function buildTestData(count, countSame, countDifferent) {
     var arr = [];
@@ -52,13 +82,14 @@ t.test('performance', {autoend: true}, t => {
     for (var i = 1; i <= 10; i++) {
       t.same(decoded[i*Math.floor(arr.length / 10)], arr[i*Math.floor(arr.length / 10)], `single value matches (${i})`);
     }
+    t.end();
   }
 
-  t.test('large encoding/decoding', async t => timeTestData(t, buildTestData(100, 5000, 500), 150, 50));
-  t.test('large encoding/decoding known data format', async t => timeTestData(t, new Uint32Array(buildTestData(100, 5000, 500)), 100, 50));
-  t.test('very large encoding/decoding known data format', async t => timeTestData(t, new Uint32Array(buildTestData(1000, 5000, 500)), 150, 50));
-  t.test('very large mostly long runs', async t => timeTestData(t, new Uint32Array(buildTestData(100, 50000, 0)), 150, 50));
-  t.test('medium mostly long runs', async t => timeTestData(t, new Uint32Array(buildTestData(100, 500, 50)), 10, 10));
-  t.test('pathological case', async t => timeTestData(t, new Uint32Array(buildTestData(10000, 2, 3)), 100, 400));
-
+  t.test('large encoding/decoding', t => timeTestData(t, buildTestData(100, 5000, 500), 150, 50));
+  t.test('large encoding/decoding known data format', t => timeTestData(t, new Uint32Array(buildTestData(100, 5000, 500)), 100, 50));
+  t.test('very large encoding/decoding known data format', t => timeTestData(t, new Uint32Array(buildTestData(1000, 5000, 500)), 150, 50));
+  t.test('very large mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 50000, 0)), 150, 50));
+  t.test('medium mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 500, 50)), 10, 10));
+  t.test('pathological case', t => timeTestData(t, new Uint32Array(buildTestData(10000, 2, 3)), 100, 400));
+  t.end();
 });
