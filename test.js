@@ -62,7 +62,7 @@ t.test('performance', t => {
     var arr = [];
     for (var i = 0; i < count; i++) {
       arr.push([...new Array(countSame)].map(() => i));
-      arr.push([...new Array(countDifferent)].map(d => i + d));
+      arr.push([...new Array(countDifferent)].map((a,d) => i + d));
     }
     return [].concat.apply([], arr);
   }
@@ -71,7 +71,7 @@ t.test('performance', t => {
     var arr = [];
     for (var i = 0; i < count; i++) {
       arr.push([...new Array(countSame)].map(() => 'string' + i));
-      arr.push([...new Array(countDifferent)].map(d => 'string_b' + i + d));
+      arr.push([...new Array(countDifferent)].map((a,d) => 'string_b' + i + d));
     }
     return [].concat.apply([], arr); 
   }
@@ -97,12 +97,13 @@ t.test('performance', t => {
 
   t.test('large encoding/decoding', t => timeTestData(t, buildTestData(100, 5000, 500), 150, 50));
   t.test('large encoding/decoding known data format', t => timeTestData(t, new Uint32Array(buildTestData(100, 5000, 500)), 100, 50));
+  t.test('very large encoding/decoding known data format one big run', t => timeTestData(t, new Uint32Array(buildTestData(1, 0, 5000000)), 150, 50));
   t.test('very large encoding/decoding known data format', t => timeTestData(t, new Uint32Array(buildTestData(1000, 5000, 500)), 150, 50));
   t.test('very large mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 50000, 0)), 150, 50));
   t.test('medium mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 500, 50)), 10, 10));
   t.test('pathological case', t => timeTestData(t, new Uint32Array(buildTestData(10000, 2, 3)), 100, 400));
-  t.test('one long run of strings', t => timeTestData(t, buildStringTestData(1, 0, 100000), 100, 20));
-  t.test('strings mixed', t => timeTestData(t, buildStringTestData(100, 500, 500), 100, 30));
+  t.test('one long run of strings', t => timeTestData(t, buildStringTestData(1, 0, 100000), 100, 50));
+  t.test('strings mixed', t => timeTestData(t, buildStringTestData(100, 500, 500), 100, 50));
   t.end();
 });
 

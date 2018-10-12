@@ -49,6 +49,10 @@ module.exports = function encode() {
     }
     else {
       result.push(new Uint8Array([flags]));
+
+      if (!(arr instanceof ResultType)) {
+        arr = new ResultType([...arr]);
+      }
     }
 
     //
@@ -75,7 +79,7 @@ module.exports = function encode() {
         }
 
         result.push(new Int32Array([-(endRunIndex - i)]));
-        result.push(new ResultType([...arr.slice(i, endRunIndex)]));
+        result.push(new ResultType(arr.slice(i, endRunIndex)));
       }
       // it is a run, so just include a count and the value
       else {

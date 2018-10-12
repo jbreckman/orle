@@ -3,9 +3,12 @@ module.exports = class StringArray extends Array {
     if (Array.isArray(o)) {
       super(o.length);
 
-      let s = o.length === 1 ? Buffer.from(o[0]) : Buffer.from(JSON.stringify(o));
+      let s = o.length === 1 ? Buffer.from(String(o[0])) : Buffer.from(JSON.stringify(o));
       this.buffer = Buffer.concat([Buffer.from(new Uint32Array([s.length]).buffer), s]);
       this.bytes = this.buffer.length;
+      for (var i = 0; i < o.length; i++) {
+        this[i] = o[i];
+      }
     }
     else if (o instanceof ArrayBuffer) {
       super(toRead);

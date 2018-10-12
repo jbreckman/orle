@@ -16,7 +16,9 @@ module.exports = function decode() {
     }
 
     var ind = 0,
-        result = new ArrayType(length);
+        result = new ArrayType(length),
+        arrayBuffer = new Uint8Array(buffer).buffer,
+        arrayBufferOffsetLookup = [];
     
     var resultIndex = 0;
     while (resultIndex < length) {
@@ -28,7 +30,25 @@ module.exports = function decode() {
         toRead = 1;
       }
 
-      let arr = new ArrayType(new Uint8Array(buffer.slice(ind)).buffer, 0, toRead);
+      let arrayBufferToUse = arrayBuffer,
+          byteRemainder = 0;
+
+      // new Uint32Array(buffer, 3, 1) will fail since it isn't an offset of 4,
+      // so we have to reallocate an array with the appropriate offsets
+      if (bytesPerElement && bytesPerElement > 1) {
+        byteRemainder = ind % bytesPerElement;
+        if (byteRemainder > 0) {
+          byteRemainder = bytesPerElement - byteRemainder;
+          arrayBufferToUse = arrayBufferOffsetLookup[byteRemainder];
+          if (!arrayBufferToUse) {
+            arrayBufferToUse = arrayBufferOffsetLookup[byteRemainder] = 
+              // this is so crazy
+              new Uint8Array(Buffer.concat([Buffer.alloc(byteRemainder), Buffer.from(arrayBuffer)])).buffer;
+          }
+        }
+      }
+
+      let arr = new ArrayType(arrayBufferToUse, ind + byteRemainder, toRead);
       ind += arr.bytes || (bytesPerElement * arr.length);
 
       if (counter > 0) {
@@ -45,7 +65,6 @@ module.exports = function decode() {
           result[resultIndex] = arr[c++];
         }
       }
-
     }
 
     if (hasLUT) {
