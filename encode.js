@@ -1,27 +1,3 @@
-
-function buildLookupTable(arr) {
-  const MAX_LOOKUP_SIZE = 255;
-  let resultSet = new Set(),
-      lastValue = null,
-      valuesSeen = 0;
-  for (let i = 0; i < arr.length; i++) {
-    if (arr[i] !== lastValue) {
-      lastValue = arr[i];
-      valuesSeen++;
-      resultSet.add(lastValue); 
-      if (resultSet.size > MAX_LOOKUP_SIZE) {
-        return null;
-      }
-    }
-  }
-
-  // only use a lookup table if it makes sense
-  if (resultSet.size * 2 < valuesSeen) {
-    return [...resultSet];
-  }
-  return null;
-}
-
 module.exports = function encode() {
   return (arr, ResultType, resultTypeIndex) => {
     const MAX_LOOKUP_SIZE = 255;

@@ -10,7 +10,7 @@ const DECODE_OPTIMIZATION_FN = [];
 function typeOptimizedFunction(cache, index, originalFn) {
   // v8 optimization does quite poorly if different array types
   // are used for the same execution of the same function.
-  // this forces v8 to treat each array type as a separately
+  // this code forces v8 to treat each array type as a separately
   // optimized function
   let fn = cache[index];
   if (!fn) {
@@ -35,7 +35,7 @@ module.exports = {
     }
 
     var ArrayType = DATA_TYPE_LOOKUP[arrayTypeIndex];
-    
+
     return typeOptimizedFunction(DECODE_OPTIMIZATION_FN, arrayTypeIndex, decode)(buffer, hasLUT, ArrayType);
   }
 };
