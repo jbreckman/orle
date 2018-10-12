@@ -1,6 +1,7 @@
 const StringArray = require('./stringArray');
 const vm = require('vm');
 const DATA_TYPE_LOOKUP = [ Int32Array, Int16Array, Int8Array, Uint32Array, Uint16Array, Uint8Array, Float32Array, Float64Array, StringArray ];
+const MAX_LOOKUP_SIZE = 255;
 const ENCODE_OPTIMIZATION_FN = [];
 const DECODE_OPTIMIZATION_FN = [];
 const TYPED_ARRAY = Int32Array.__proto__;
@@ -43,11 +44,58 @@ function inferArrayType(arr) {
   }
 }
 
+function buildLookupTable(arr) {
+  let resultSet = new Set(),
+      lastValue = null,
+      valuesSeen = 0;
+  for (var i = 0; i < arr.length; i++) {
+    if (arr[i] !== lastValue) {
+      lastValue = arr[i];
+      valuesSeen++;
+      resultSet.add(lastValue); 
+      if (resultSet.size > MAX_LOOKUP_SIZE) {
+        return null;
+      }
+    }
+  }
+
+  // only use a lookup table if it makes sense
+  if (resultSet.size * 2 < valuesSeen) {
+    return [...resultSet];
+  }
+  return null;
+}
+
 function encode() {
-  return (arr, ResultType, resultTypeIndex) => {
+  return (arr, lut, ResultType, resultTypeIndex) => {
     let result = [];
-    result.push(new Int32Array([arr.length]));
-    result.push(new Int8Array([resultTypeIndex]));
+    result.push(new Uint32Array([arr.length]));
+
+    let flags = resultTypeIndex;
+
+    // decide if we are going to build a LUT or not, and transform the resulting array into Uint8Array
+    let lookupArray = lut,
+        lookupMap = null;
+    if (lookupArray) {
+      lookupMap = lookupArray.reduce((acc, val, i) => {
+        acc[val] = i;
+        return acc;
+      }, {});
+
+      let oldArr = arr;
+      arr = new Uint8Array(arr.length);
+      for (var j = 0; j < arr.length; j++) {
+        arr[j] = lookupMap[oldArr[j]];
+      }
+
+      result.push(new Uint8Array([flags | 128, lookupArray.length]));
+      result.push(new ResultType(lookupArray));
+
+      ResultType = Uint8Array;
+    }
+    else {
+      result.push(new Uint8Array([flags]));
+    }
 
     for (var i = 0; i < arr.length; i++) {
       // check to see if this is a run
@@ -85,11 +133,22 @@ function encode() {
 }
 
 function decode() {
-  return (buffer, ArrayType, arrayTypeIndex) => {
-    var length = buffer.readInt32LE(0),
-        bytesPerElement = ArrayType.BYTES_PER_ELEMENT;
+  return (buffer, hasLUT, ArrayType, arrayTypeIndex) => {
+    var length = buffer.readUInt32LE(0),
+        bytesPerElement = ArrayType.BYTES_PER_ELEMENT,
+        FinalType = ArrayType,
+        lut = null;
 
     buffer = buffer.slice(5);
+
+    if (hasLUT) {
+      let lutSize = buffer.readUInt8(0);
+      lut = new ArrayType(new Uint8Array(buffer.slice(1)).buffer, 0, lutSize);
+      buffer = buffer.slice(1 + (lut.bytes || (bytesPerElement * lut.length)));
+      ArrayType = Uint8Array;
+      bytesPerElement = 1;
+    }
+
     var ind = 0,
         result = new ArrayType(length);
     
@@ -121,7 +180,15 @@ function decode() {
         }
       }
 
-    }    
+    }
+
+    if (hasLUT) {
+      let realResult = new FinalType(result.length);
+      for (var i = 0; i < realResult.length; i++) {
+        realResult[i] = lut[result[i]];
+      }
+      return realResult;
+    }
     
     return result;
   };
@@ -141,11 +208,18 @@ module.exports = {
       fn = ENCODE_OPTIMIZATION_FN[resultTypeIndex] = vm.runInThisContext(`(${encode.toString()})()`);
     }
 
-    return fn(arr, ResultType, resultTypeIndex);
+    return fn(arr, buildLookupTable(arr), ResultType, resultTypeIndex);
   },
   decode: (buffer) => {
     var arrayTypeIndex = buffer.readUInt8(4),
-        ArrayType = DATA_TYPE_LOOKUP[arrayTypeIndex];
+        hasLUT = false;
+
+    if (arrayTypeIndex & 128) {
+      hasLUT = true;
+      arrayTypeIndex &= 127;
+    }
+
+    var ArrayType = DATA_TYPE_LOOKUP[arrayTypeIndex];
 
     // v8 optimization does quite poorly if different array types
     // are used for the same execution of the same function.
@@ -156,6 +230,6 @@ module.exports = {
       fn = DECODE_OPTIMIZATION_FN[arrayTypeIndex] = vm.runInThisContext(`(${decode.toString()})()`);
     }
 
-    return fn(buffer, ArrayType, arrayTypeIndex);
+    return fn(buffer, hasLUT, ArrayType, arrayTypeIndex);
   }
 };

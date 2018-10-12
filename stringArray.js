@@ -8,7 +8,7 @@ module.exports = class StringArray extends Array {
         var s = String(o[i]),
             buffer = Buffer.from(s);
         this[i] = s;
-        bufferPieces.push(Buffer.from(new Int32Array([buffer.length]).buffer));
+        bufferPieces.push(Buffer.from(new Uint32Array([buffer.length]).buffer));
         bufferPieces.push(buffer);
       }
       this.buffer = Buffer.concat(bufferPieces);
@@ -23,7 +23,7 @@ module.exports = class StringArray extends Array {
       toRead = toRead || 0;
       this.bytes = 0;
       while (toRead > 0) {
-        let length = o.readInt32LE(offset);
+        let length = o.readUInt32LE(offset);
         offset += 4;
         this[index++] = String(o.slice(offset, offset + length));
         offset += length;

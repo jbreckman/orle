@@ -93,3 +93,55 @@ t.test('performance', t => {
   t.test('pathological case', t => timeTestData(t, new Uint32Array(buildTestData(10000, 2, 3)), 100, 400));
   t.end();
 });
+
+
+t.test('lookup tables', t => {
+
+  function confirm(t, arr, itemCount, itemSize, totalElements, transitions) {
+    var encoded = orle.encode(arr);
+    var expectedSize = 5 + 1 + itemCount*itemSize + transitions*4 + totalElements;
+    t.same(encoded.length, expectedSize, `correct size (${expectedSize})`);
+    t.same([...orle.decode(encoded)], [...arr], 'correct values');
+    t.end();
+  }
+
+  t.test('test uint32', t => confirm(t, [1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,100000], 5, 4, 25, 13));
+  t.test('test uint32 long run', t => confirm(t, [100000,200000,300000,100000,200000,300000,100000,200000,300000,100000,200000,300000,100000,200000,300000,100000,200000,300000,100000,200000,300000,100000,200000,300000], 3, 4, 24, 1));
+  t.test('test int32', t => confirm(t, [1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,-100000], 5, 4, 25, 13));
+  t.test('test uint16', t => confirm(t, [1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1000], 5, 2, 25, 13));
+  t.test('test int16', t => confirm(t, [1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,-1000], 5, 2, 25, 13));
+  t.test('test float64', t => confirm(t, [1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1,2,3,4,4,1000.01], 5, 8, 25, 13));
+  t.end();
+});
+
+
+t.test('string lookup tables', t => {
+
+  const S1 = 'how are you',
+        S1_LENGTH = S1.length,
+        S2 = 'i am good',
+        S2_LENGTH = S2.length,
+        S3 = 'test',
+        S3_LENGTH = S3.length,
+        S4 = '',
+        S4_LENGTH = S4.length;
+
+  function confirm(t, arr, itemCount, totalItemSize, totalElements, transitions) {
+    var encoded = orle.encode(arr);
+    var expectedSize = 5 + 1 + itemCount*4 + totalItemSize + transitions*4 + totalElements;
+    t.same(encoded.length, expectedSize, `correct size (${expectedSize})`);
+    t.same([...orle.decode(encoded)], [...arr], 'correct values');
+    t.end();
+  }
+  function dupeArray(arr, count) {
+    var res = [];
+    for (var i = 0; i < count; i++) {
+      res = res.concat(arr);
+    }
+    return res;
+  }
+
+  t.test('simple run', t => confirm(t, dupeArray([S1, S2, S3], 100), 3, S1_LENGTH + S2_LENGTH + S3_LENGTH, 300, 1));
+  t.test('non-uniform run', t => confirm(t, dupeArray([S1, S2, S3, S4, S4], 100), 4, S4_LENGTH + S1_LENGTH + S2_LENGTH + S3_LENGTH, 400, 200));
+  t.end();
+});
