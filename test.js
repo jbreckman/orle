@@ -29,9 +29,10 @@ t.test('encode/decode', t => {
 
 t.test('string encode/decode', t => {
 
-  function confirm(t, arr, itemCount, totalItemSize, transitions) {
+  function confirm(t, arr, itemCount, totalItemSize, transitions, singleElementArrayCount) {
     var encoded = orle.encode(arr);
-    var expectedSize = 5 + itemCount*4 + totalItemSize + transitions*4;
+
+    var expectedSize = 5 /* header size */ + itemCount*3 /* handle "", between elements */ + totalItemSize + transitions*9 /* each transition has a 4 byte length, 4 byte count, and 2 bytes for [] */ - singleElementArrayCount * 4 /* single string arrays aren't stored as arrays */;
     t.same(encoded.length, expectedSize, 'correct size');
     t.same([...orle.decode(encoded)], [...arr], 'correct values');
     t.end();
@@ -46,12 +47,12 @@ t.test('string encode/decode', t => {
         S4 = '',
         S4_LENGTH = S4.length;
 
-  t.test('single run', t => confirm(t, [S2, S2, S2], 1, S2_LENGTH, 1));
-  t.test('non-uniform run', t => confirm(t, [S1, S2, S3], 3, S1_LENGTH + S2_LENGTH + S3_LENGTH, 1));
-  t.test('test basic strings', t => confirm(t, [S1, S2, S2, S2], 2, S1_LENGTH + S2_LENGTH, 2));
-  t.test('empty strings', t => confirm(t, [S4, S4, S4], 1, S4_LENGTH, 1));
-  t.test('non-uniform run with empty string', t => confirm(t, [S1, S2, S3, S4], 4, S1_LENGTH + S2_LENGTH + S3_LENGTH, 1));
-  t.test('run then non-uniform', t => confirm(t, [S3, S3, S3, S3, S1, S2, S3, S4, S3, S3, S3,], 6, S1_LENGTH + S2_LENGTH + S3_LENGTH + S3_LENGTH + S3_LENGTH, 3));
+  t.test('single run', t => confirm(t, [S2, S2, S2], 1, S2_LENGTH, 1, 1));
+  t.test('non-uniform run', t => confirm(t, [S1, S2, S3], 3, S1_LENGTH + S2_LENGTH + S3_LENGTH, 1, 0));
+  t.test('test basic strings', t => confirm(t, [S1, S2, S2, S2], 2, S1_LENGTH + S2_LENGTH, 2, 2));
+  t.test('empty strings', t => confirm(t, [S4, S4, S4], 1, S4_LENGTH, 1, 1));
+  t.test('non-uniform run with empty string', t => confirm(t, [S1, S2, S3, S4], 4, S1_LENGTH + S2_LENGTH + S3_LENGTH, 1, 0));
+  t.test('run then non-uniform', t => confirm(t, [S3, S3, S3, S3, S1, S2, S3, S4, S3, S3, S3], 6, S1_LENGTH + S2_LENGTH + S3_LENGTH + S3_LENGTH + S3_LENGTH, 3, 2));
   t.end();
 });
 
@@ -66,6 +67,15 @@ t.test('performance', t => {
     return [].concat.apply([], arr);
   }
 
+  function buildStringTestData(count, countSame, countDifferent) {
+    var arr = [];
+    for (var i = 0; i < count; i++) {
+      arr.push([...new Array(countSame)].map(() => 'string' + i));
+      arr.push([...new Array(countDifferent)].map(d => 'string_b' + i + d));
+    }
+    return [].concat.apply([], arr); 
+  }
+
   function timeTestData(t, arr, maxEncodeTime, maxDecodeTime) {
     var startTime = new Date().getTime();
     let encoded = orle.encode(arr);
@@ -75,7 +85,7 @@ t.test('performance', t => {
     startTime = new Date().getTime(); 
     let decoded = orle.decode(encoded);
     duration = new Date().getTime() - startTime;
-    t.true(duration < maxDecodeTime, `faster than ${maxDecodeTime}ms to decode ${arr.length} (${duration}ms) with ${(1-(encoded.length/decoded.buffer.byteLength))*100}% compression`);
+    t.true(duration < maxDecodeTime, `faster than ${maxDecodeTime}ms to decode ${arr.length} (${duration}ms) with ${(1-(encoded.length/(decoded.buffer&&decoded.buffer.byteLength)))*100}% compression`);
 
     t.same(decoded.length, arr.length, 'lengths match');
     // it's too slow to check every value, so check 10 values
@@ -91,6 +101,8 @@ t.test('performance', t => {
   t.test('very large mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 50000, 0)), 150, 50));
   t.test('medium mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 500, 50)), 10, 10));
   t.test('pathological case', t => timeTestData(t, new Uint32Array(buildTestData(10000, 2, 3)), 100, 400));
+  t.test('one long run of strings', t => timeTestData(t, buildStringTestData(1, 0, 100000), 100, 20));
+  t.test('strings mixed', t => timeTestData(t, buildStringTestData(100, 500, 500), 100, 30));
   t.end();
 });
 
@@ -126,9 +138,9 @@ t.test('string lookup tables', t => {
         S4 = '',
         S4_LENGTH = S4.length;
 
-  function confirm(t, arr, itemCount, totalItemSize, totalElements, transitions) {
+  function confirm(t, arr, itemCount, totalItemSize, totalElements, transitions, singleElementArrayCount) {
     var encoded = orle.encode(arr);
-    var expectedSize = 5 + 1 + itemCount*4 + totalItemSize + transitions*4 + totalElements;
+    var expectedSize = 5 + 1 + 4 + itemCount*3 - 1 + 2 + totalItemSize + transitions*4 + totalElements - singleElementArrayCount*4;
     t.same(encoded.length, expectedSize, `correct size (${expectedSize})`);
     t.same([...orle.decode(encoded)], [...arr], 'correct values');
     t.end();
@@ -141,7 +153,8 @@ t.test('string lookup tables', t => {
     return res;
   }
 
-  t.test('simple run', t => confirm(t, dupeArray([S1, S2, S3], 100), 3, S1_LENGTH + S2_LENGTH + S3_LENGTH, 300, 1));
-  t.test('non-uniform run', t => confirm(t, dupeArray([S1, S2, S3, S4, S4], 100), 4, S4_LENGTH + S1_LENGTH + S2_LENGTH + S3_LENGTH, 400, 200));
+  t.test('small run', t => confirm(t, dupeArray([S1, S2, S3], 10), 3, S1_LENGTH + S2_LENGTH + S3_LENGTH, 30, 1, 0));
+  t.test('simple run', t => confirm(t, dupeArray([S1, S2, S3], 100), 3, S1_LENGTH + S2_LENGTH + S3_LENGTH, 300, 1, 0));
+  t.test('non-uniform run', t => confirm(t, dupeArray([S1, S2, S3, S4, S4], 100), 4, S4_LENGTH + S1_LENGTH + S2_LENGTH + S3_LENGTH, 400, 200, 0));
   t.end();
 });

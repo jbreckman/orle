@@ -3,32 +3,26 @@ module.exports = class StringArray extends Array {
     if (Array.isArray(o)) {
       super(o.length);
 
-      let bufferPieces = [];
-      for (var i = 0; i < o.length; i++) {
-        var s = String(o[i]),
-            buffer = Buffer.from(s);
-        this[i] = s;
-        bufferPieces.push(Buffer.from(new Uint32Array([buffer.length]).buffer));
-        bufferPieces.push(buffer);
-      }
-      this.buffer = Buffer.concat(bufferPieces);
+      let s = o.length === 1 ? Buffer.from(o[0]) : Buffer.from(JSON.stringify(o));
+      this.buffer = Buffer.concat([Buffer.from(new Uint32Array([s.length]).buffer), s]);
       this.bytes = this.buffer.length;
     }
     else if (o instanceof ArrayBuffer) {
       super(toRead);
       o = Buffer.from(o);
       this.buffer = o;
-      var index = 0;
-      offset = offset || 0;
-      toRead = toRead || 0;
-      this.bytes = 0;
-      while (toRead > 0) {
-        let length = o.readUInt32LE(offset);
-        offset += 4;
-        this[index++] = String(o.slice(offset, offset + length));
-        offset += length;
-        this.bytes += length + 4;
-        toRead--;
+      let length = o.readUInt32LE(offset);
+      let s = String(o.slice(offset + 4, 4 + offset + length));
+      this.bytes = 4 + length;
+
+      if (toRead === 1) {
+        this[0] = s;
+      }
+      else {
+        let arr = JSON.parse(s);
+        for (var i = 0; i < arr.length; i++) {
+          this[i] = arr[i];
+        }
       }
     }
     else if (Number.isFinite(o)) {
@@ -39,4 +33,3 @@ module.exports = class StringArray extends Array {
     }
   }
 };
-
