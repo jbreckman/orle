@@ -1,5 +1,5 @@
 module.exports = function encode() {
-  return (arr, ResultType, resultTypeIndex) => {
+  return (arr, VLI, ResultType, resultTypeIndex) => {
     const MAX_LOOKUP_SIZE = 255;
     let result = [];
     result.push(new Uint32Array([arr.length]));
@@ -78,12 +78,12 @@ module.exports = function encode() {
           }
         }
 
-        result.push(new Int32Array([-(endRunIndex - i)]));
+        result.push(new Uint8Array(VLI.encode(-(endRunIndex - i))));
         result.push(new ResultType(arr.slice(i, endRunIndex)));
       }
       // it is a run, so just include a count and the value
       else {
-        result.push(new Int32Array([endRunIndex - i]));
+        result.push(new Uint8Array(VLI.encode(endRunIndex - i)));
         result.push(new ResultType([currentValue]));
       }
       i = endRunIndex - 1;
