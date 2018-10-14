@@ -1,5 +1,6 @@
 const StringArray = require('./stringArray');
 const inferArrayType = require('./inferArrayType');
+const variableLengthInteger = require('./variableLengthInteger');
 const decode = require('./decode');
 const encode = require('./encode');
 const vm = require('vm');
@@ -23,7 +24,7 @@ module.exports = {
   encode: (arr)  => {
     let ResultType = inferArrayType(arr),
         resultTypeIndex = DATA_TYPE_LOOKUP.indexOf(ResultType);
-    return typeOptimizedFunction(ENCODE_OPTIMIZATION_FN, resultTypeIndex, encode)(arr, ResultType, resultTypeIndex);
+    return typeOptimizedFunction(ENCODE_OPTIMIZATION_FN, resultTypeIndex, encode)(arr, variableLengthInteger, ResultType, resultTypeIndex);
   },
   decode: (buffer) => {
     var arrayTypeIndex = buffer.readUInt8(4),
@@ -36,6 +37,6 @@ module.exports = {
 
     var ArrayType = DATA_TYPE_LOOKUP[arrayTypeIndex];
 
-    return typeOptimizedFunction(DECODE_OPTIMIZATION_FN, arrayTypeIndex, decode)(buffer, hasLUT, ArrayType);
+    return typeOptimizedFunction(DECODE_OPTIMIZATION_FN, arrayTypeIndex, decode)(buffer, variableLengthInteger, hasLUT, ArrayType);
   }
 };

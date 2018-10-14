@@ -1,11 +1,29 @@
 const t = require('tap');
 const orle = require('./index');
+const variableLengthInteger = require('./variableLengthInteger');
+
+t.test('variable length integer', t => {
+  function confirm(t, value) {
+    let encoded = variableLengthInteger.encode(value);
+    let expectedSize = variableLengthInteger.byteCount(value);
+    t.same(encoded.length, expectedSize, `${value} is ${expectedSize} bytes`);
+    let decoded = variableLengthInteger.decode(encoded, 0);
+    t.same(value, decoded, 'checking ' + value);
+  }
+
+  let values = [0, 15, -15, 16, -16, 30, 63, -63, 64, -64, 65, -65, 127, -127, 128, -128, 129, 1000, -1000, 10000, -10000, 100000, -100000, 1e7, -1e7, 1e8, -1e8, 1<<30, -(1<<30)];
+
+  values.forEach(value => confirm(t, value));
+
+  t.end();
+});
 
 t.test('encode/decode', t => {
 
-  function confirm(t, arr, itemCount, itemSize, transitions) {
+  function confirm(t, arr, itemCount, itemSize, transitions, lengthSize) {
+    lengthSize = lengthSize || 1;
     var encoded = orle.encode(arr);
-    var expectedSize = 5 + itemCount*itemSize + transitions*4;
+    var expectedSize = 5 + itemCount*itemSize + transitions*lengthSize;
     t.same(encoded.length, expectedSize, 'correct size');
     t.same([...orle.decode(encoded)], [...arr], 'correct values');
     t.end();
@@ -29,10 +47,12 @@ t.test('encode/decode', t => {
 
 t.test('string encode/decode', t => {
 
-  function confirm(t, arr, itemCount, totalItemSize, transitions, singleElementArrayCount) {
+  function confirm(t, arr, itemCount, totalItemSize, transitions, singleElementArrayCount, lengthSize, countSize) {
+    countSize = countSize || 1;
+    lengthSize = lengthSize || 1;
     var encoded = orle.encode(arr);
 
-    var expectedSize = 5 /* header size */ + itemCount*3 /* handle "", between elements */ + totalItemSize + transitions*9 /* each transition has a 4 byte length, 4 byte count, and 2 bytes for [] */ - singleElementArrayCount * 4 /* single string arrays aren't stored as arrays */;
+    var expectedSize = 5 /* header size */ + itemCount*3 /* handle "", between elements */ + totalItemSize + transitions*lengthSize + transitions*countSize + transitions /* each transition has a 4 byte length, 4 byte count, and 2 bytes for [] */ - singleElementArrayCount * 4 /* single string arrays aren't stored as arrays */;
     t.same(encoded.length, expectedSize, 'correct size');
     t.same([...orle.decode(encoded)], [...arr], 'correct values');
     t.end();
@@ -45,7 +65,9 @@ t.test('string encode/decode', t => {
         S3 = 'test',
         S3_LENGTH = S3.length,
         S4 = '',
-        S4_LENGTH = S4.length;
+        S4_LENGTH = S4.length,
+        S5 = 'abc'.repeat(30),
+        S5_LENGTH = S5.length;
 
   t.test('single run', t => confirm(t, [S2, S2, S2], 1, S2_LENGTH, 1, 1));
   t.test('non-uniform run', t => confirm(t, [S1, S2, S3], 3, S1_LENGTH + S2_LENGTH + S3_LENGTH, 1, 0));
@@ -53,6 +75,10 @@ t.test('string encode/decode', t => {
   t.test('empty strings', t => confirm(t, [S4, S4, S4], 1, S4_LENGTH, 1, 1));
   t.test('non-uniform run with empty string', t => confirm(t, [S1, S2, S3, S4], 4, S1_LENGTH + S2_LENGTH + S3_LENGTH, 1, 0));
   t.test('run then non-uniform', t => confirm(t, [S3, S3, S3, S3, S1, S2, S3, S4, S3, S3, S3], 6, S1_LENGTH + S2_LENGTH + S3_LENGTH + S3_LENGTH + S3_LENGTH, 3, 2));
+  t.test('long run', t => confirm(t, [...new Array(1000)].fill(S2), 1, S2_LENGTH, 1, 1, 1, 2));
+  t.test('very long run', t => confirm(t, [...new Array(10000)].fill(S2), 1, S2_LENGTH, 1, 1, 1, 3));
+  t.test('long string', t => confirm(t, [S5, S5, S5], 1, S5_LENGTH, 1, 1, 2, 1));
+  t.test('very long run with longs string', t => confirm(t, [...new Array(10000)].fill(S5), 1, S5_LENGTH, 1, 1, 2, 3));
   t.end();
 });
 
@@ -100,19 +126,19 @@ t.test('performance', t => {
   t.test('very large encoding/decoding known data format one big run', t => timeTestData(t, new Uint32Array(buildTestData(1, 0, 5000000)), 150, 50));
   t.test('very large encoding/decoding known data format', t => timeTestData(t, new Uint32Array(buildTestData(1000, 5000, 500)), 150, 50));
   t.test('very large mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 50000, 0)), 150, 50));
-  t.test('medium mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 500, 50)), 10, 10));
+  t.test('medium mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 500, 50)), 30, 20));
   t.test('pathological case', t => timeTestData(t, new Uint32Array(buildTestData(10000, 2, 3)), 100, 400));
-  t.test('one long run of strings', t => timeTestData(t, buildStringTestData(1, 0, 100000), 100, 50));
+  t.test('one long run of strings', t => timeTestData(t, buildStringTestData(1, 0, 100000), 150, 50));
   t.test('strings mixed', t => timeTestData(t, buildStringTestData(100, 500, 500), 100, 50));
   t.end();
 });
 
-
 t.test('lookup tables', t => {
 
-  function confirm(t, arr, itemCount, itemSize, totalElements, transitions) {
+  function confirm(t, arr, itemCount, itemSize, totalElements, transitions, lengthSize) {
+    lengthSize = lengthSize || 1;
     var encoded = orle.encode(arr);
-    var expectedSize = 5 + 1 + itemCount*itemSize + transitions*4 + totalElements;
+    var expectedSize = 5 + 1 + itemCount*itemSize + transitions*lengthSize + totalElements;
     t.same(encoded.length, expectedSize, `correct size (${expectedSize})`);
     t.same([...orle.decode(encoded)], [...arr], 'correct values');
     t.end();
@@ -127,7 +153,6 @@ t.test('lookup tables', t => {
   t.end();
 });
 
-
 t.test('string lookup tables', t => {
 
   const S1 = 'how are you',
@@ -139,9 +164,10 @@ t.test('string lookup tables', t => {
         S4 = '',
         S4_LENGTH = S4.length;
 
-  function confirm(t, arr, itemCount, totalItemSize, totalElements, transitions, singleElementArrayCount) {
+  function confirm(t, arr, itemCount, totalItemSize, totalElements, transitions, singleElementArrayCount, lengthSize) {
+    lengthSize = lengthSize || 1;
     var encoded = orle.encode(arr);
-    var expectedSize = 5 + 1 + 4 + itemCount*3 - 1 + 2 + totalItemSize + transitions*4 + totalElements - singleElementArrayCount*4;
+    var expectedSize = 5 + 1 + 1 + itemCount*3 - 1 + 2 + totalItemSize + transitions*lengthSize + totalElements - singleElementArrayCount*4;
     t.same(encoded.length, expectedSize, `correct size (${expectedSize})`);
     t.same([...orle.decode(encoded)], [...arr], 'correct values');
     t.end();
@@ -155,7 +181,7 @@ t.test('string lookup tables', t => {
   }
 
   t.test('small run', t => confirm(t, dupeArray([S1, S2, S3], 10), 3, S1_LENGTH + S2_LENGTH + S3_LENGTH, 30, 1, 0));
-  t.test('simple run', t => confirm(t, dupeArray([S1, S2, S3], 100), 3, S1_LENGTH + S2_LENGTH + S3_LENGTH, 300, 1, 0));
+  t.test('simple run', t => confirm(t, dupeArray([S1, S2, S3], 100), 3, S1_LENGTH + S2_LENGTH + S3_LENGTH, 300, 1, 0, 2));
   t.test('non-uniform run', t => confirm(t, dupeArray([S1, S2, S3, S4, S4], 100), 4, S4_LENGTH + S1_LENGTH + S2_LENGTH + S3_LENGTH, 400, 200, 0));
   t.end();
 });

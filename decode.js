@@ -1,5 +1,5 @@
 module.exports = function decode() {
-  return (buffer, hasLUT, ArrayType) => {
+  return (buffer, VLI, hasLUT, ArrayType) => {
     var length = buffer.readUInt32LE(0),
         bytesPerElement = ArrayType.BYTES_PER_ELEMENT,
         FinalType = ArrayType,
@@ -22,8 +22,9 @@ module.exports = function decode() {
     
     var resultIndex = 0;
     while (resultIndex < length) {
-      let counter = buffer.readInt32LE(ind);
-      ind += 4;
+
+      let counter = VLI.decode(buffer, ind);
+      ind += VLI.byteCount(counter);
 
       let toRead = -counter;
       if (counter > 0) {
