@@ -1,3 +1,8 @@
+[![NPM Version][npm-image]][npm-url]
+[![NPM Downloads][downloads-image]][downloads-url]
+[![Test Coverage][circle-image]][circle-url]
+
+
 # orle
 `orle` (pronounced "Oh, really?") is simple **r**un **l**ength **e**ncoder for Javascript typed arrays.  
 
