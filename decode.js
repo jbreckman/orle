@@ -1,12 +1,49 @@
 module.exports = function decode() {
   return (buffer, hasLUT, ArrayType) => {
-    var length = buffer.readUInt32LE(0),
-        bytesPerElement = ArrayType.BYTES_PER_ELEMENT,
+    let bytesPerElement = ArrayType.BYTES_PER_ELEMENT,
+        runsType = buffer.readUInt8(2),   // find the "runs" length type
         FinalType = ArrayType,
-        lut = null;
+        lut = null,
+        runs = null;
 
-    buffer = buffer.slice(5);
+    // 3 bytes of headers
+    buffer = buffer.slice(3);
 
+    if (runsType === 0) { // int32 runs
+      runs = new Int32Array(new Int8Array(buffer).buffer, 0, Math.floor(buffer.length / 4));
+    }
+    else if (runsType === 1) {
+      runs = new Int16Array(new Int8Array(buffer).buffer, 0, Math.floor(buffer.length / 2));
+    }
+    else if (runsType === 2) {
+      runs = new Int8Array(buffer);
+    }
+
+    // find the size of runs, plus the total number of elements we'll be reading,
+    // and the total number of final elements in the final array
+    let totalFinalElements = 0,
+        arrayToReadSize = 0,
+        totalRunElements = 0;
+    for (let i = 0; i < runs.length; i++) {
+      let runAmount = runs[i];
+      if (runAmount > 0) {
+        arrayToReadSize++;
+        totalFinalElements += runAmount;
+      }
+      else if (runAmount < 0) {
+        arrayToReadSize -= runAmount;
+        totalFinalElements -= runAmount;
+      }
+      else {
+        totalRunElements = i+1;
+        break;
+      }
+    }
+
+    // trim off our runs
+    buffer = buffer.slice(runs.BYTES_PER_ELEMENT * totalRunElements);
+
+    // read our lookup table (if needed)
     if (hasLUT) {
       let lutSize = buffer.readUInt8(0);
       lut = new ArrayType(new Uint8Array(buffer.slice(1)).buffer, 0, lutSize);
@@ -15,61 +52,39 @@ module.exports = function decode() {
       bytesPerElement = 1;
     }
 
-    var ind = 0,
-        result = new ArrayType(length),
-        arrayBuffer = new Uint8Array(buffer).buffer,
-        arrayBufferOffsetLookup = [];
-    
-    var resultIndex = 0;
-    while (resultIndex < length) {
-      let counter = buffer.readInt32LE(ind);
-      ind += 4;
+    // actually decode the runs
+    let arr = new ArrayType(new Uint8Array(buffer).buffer, 0, arrayToReadSize), 
+        result = new ArrayType(totalFinalElements),
+        ind = 0,
+        resultIndex = 0;
 
-      let toRead = -counter;
-      if (counter > 0) {
-        toRead = 1;
-      }
+    if (totalRunElements === 2 && runs[0] < 0) {
+      result = arr;
+    }
+    else {
+      for (let i = 0; i < totalRunElements - 1; i++) {
+        let counter = runs[i];
 
-      let arrayBufferToUse = arrayBuffer,
-          byteRemainder = 0;
-
-      // new Uint32Array(buffer, 3, 1) will fail since it isn't an offset of 4,
-      // so we have to reallocate an array with the appropriate offsets
-      if (bytesPerElement && bytesPerElement > 1) {
-        byteRemainder = ind % bytesPerElement;
-        if (byteRemainder > 0) {
-          byteRemainder = bytesPerElement - byteRemainder;
-          arrayBufferToUse = arrayBufferOffsetLookup[byteRemainder];
-          if (!arrayBufferToUse) {
-            arrayBufferToUse = arrayBufferOffsetLookup[byteRemainder] = 
-              // this is so crazy
-              new Uint8Array(Buffer.concat([Buffer.alloc(byteRemainder), Buffer.from(arrayBuffer)])).buffer;
+        if (counter > 0) {
+          let currentValue = arr[ind++],
+              endIndex = resultIndex + counter;
+          for (; resultIndex < endIndex; resultIndex++) {
+            result[resultIndex] = currentValue;
           }
         }
-      }
-
-      let arr = new ArrayType(arrayBufferToUse, ind + byteRemainder, toRead);
-      ind += arr.bytes || (bytesPerElement * arr.length);
-
-      if (counter > 0) {
-        let currentValue = arr[0],
-            endIndex = resultIndex + counter;
-        for (; resultIndex < endIndex; resultIndex++) {
-          result[resultIndex] = currentValue;
-        }
-      }
-      else {
-        let endIndex = resultIndex - counter,
-            c = 0;
-        for (; resultIndex < endIndex; resultIndex++) {
-          result[resultIndex] = arr[c++];
+        else {
+          let endIndex = resultIndex - counter;
+          for (; resultIndex < endIndex; resultIndex++) {
+            result[resultIndex] = arr[ind++];
+          }
         }
       }
     }
 
+    // if there is a lookup table, bring it back
     if (hasLUT) {
       let realResult = new FinalType(result.length);
-      for (var i = 0; i < realResult.length; i++) {
+      for (let i = 0; i < realResult.length; i++) {
         realResult[i] = lut[result[i]];
       }
       return realResult;
