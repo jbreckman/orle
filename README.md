@@ -1,7 +1,5 @@
-[![NPM Version][npm-image]][npm-url]
-[![NPM Downloads][downloads-image]][downloads-url]
-[![Test Coverage][circle-image]][circle-url]
-
+[![npm version](https://badge.fury.io/js/orle.svg)](https://badge.fury.io/js/orle)
+[![CircleCI](https://circleci.com/gh/jbreckman/orle.svg?style=svg)](https://circleci.com/gh/jbreckman/orle)
 
 # orle
 `orle` (pronounced "Oh, really?") is simple **r**un **l**ength **e**ncoder for Javascript typed arrays.  
