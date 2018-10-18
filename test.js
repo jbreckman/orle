@@ -159,7 +159,7 @@ t.test('performance', t => {
   t.test('very large mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 50000, 0)), 150, 50));
   t.test('medium mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 500, 50)), 30, 10));
   t.test('pathological case', t => timeTestData(t, new Uint32Array(buildTestData(10000, 2, 3)), 100, 400));
-  t.test('one long run of strings', t => timeTestData(t, buildStringTestData(1, 0, 100000), 150, 50));
+  t.test('one long run of strings', t => timeTestData(t, buildStringTestData(1, 0, 100000), 250, 50));
   t.test('strings mixed', t => timeTestData(t, buildStringTestData(100, 500, 500), 100, 50));
   t.end();
 });
