@@ -1,9 +1,8 @@
 module.exports = function encode() {
-  return (arr, ResultType, resultTypeIndex) => {
+  return (version, arr, ResultType, resultTypeIndex) => {
     const MAX_LOOKUP_SIZE = 255;
-    let result = [];
-    result.push(new Uint32Array([arr.length]));
-
+    let result = [new Uint8Array([version])];
+    
     let flags = resultTypeIndex;
 
     //
@@ -13,7 +12,8 @@ module.exports = function encode() {
     let resultSet = new Set(),
         lastValue = null,
         valuesSeen = 0,
-        lookupMap = null;
+        lookupMap = null,
+        lookupTableArray = null;
 
     for (let i = 0; i < arr.length; i++) {
       if (arr[i] !== lastValue) {
@@ -42,8 +42,8 @@ module.exports = function encode() {
         arr[j] = lookupMap[oldArr[j]];
       }
 
-      result.push(new Uint8Array([flags | 128, lookupArray.length]));
-      result.push(new ResultType(lookupArray));
+      result.push(new Uint8Array([flags | 128]));
+      lookupTableArray =  new ResultType(lookupArray);
 
       ResultType = Uint8Array;
     }
@@ -54,6 +54,11 @@ module.exports = function encode() {
         arr = new ResultType([...arr]);
       }
     }
+
+    let runs = [],
+        valueArrays = [],
+        maxRunLength = 0,
+        minRunLength = 0;
 
     //
     // Actually encode
@@ -69,6 +74,9 @@ module.exports = function encode() {
         }
       }
 
+      let runLength = null,
+          runArrayValue = null;
+
       // this is not a run, so see how many numbers are not a run
       if (endRunIndex === i + 1) {
         for (; endRunIndex < arr.length; endRunIndex++) {
@@ -78,15 +86,55 @@ module.exports = function encode() {
           }
         }
 
-        result.push(new Int32Array([-(endRunIndex - i)]));
-        result.push(new ResultType(arr.slice(i, endRunIndex)));
+        runLength = -(endRunIndex - i);
+        runArrayValue = new ResultType(arr.slice(i, endRunIndex));
       }
       // it is a run, so just include a count and the value
       else {
-        result.push(new Int32Array([endRunIndex - i]));
-        result.push(new ResultType([currentValue]));
+        runLength = endRunIndex - i;
+        runArrayValue = new ResultType([currentValue]);
       }
+
+      runs.push(runLength);
+      valueArrays.push(runArrayValue);
+
+      if (runLength > maxRunLength) {
+        maxRunLength = runLength;
+      }
+      if (runLength < minRunLength) {
+        minRunLength = runLength;
+      }
+
       i = endRunIndex - 1;
+    }
+
+    // indicates the run lengths are done
+    runs.push(0);
+
+    // figure out the data type to store our run lengths
+    if (minRunLength < -32768 || maxRunLength >= 32768) {
+      result.push(new Uint8Array([0])); // 32 bit array
+      result.push(new Int32Array(runs));
+    }
+    else if (minRunLength < -128 || maxRunLength >= 128) {
+      result.push(new Uint8Array([1])); // 16 bit array
+      result.push(new Int16Array(runs));
+    }
+    else {
+      result.push(new Uint8Array([2])); // 8 bit array
+      result.push(new Int8Array(runs));
+    }
+
+    if (lookupTableArray) {
+      result.push(new Uint8Array([lookupTableArray.length]));
+      result.push(lookupTableArray);
+    }
+
+    if (ResultType.join) {
+      result.push(ResultType.join(valueArrays));
+    }
+    else {
+      result = result.concat(valueArrays);
     }
 
     return Buffer.concat(result.map(d => Buffer.from(d.buffer)));

@@ -6,6 +6,7 @@ const vm = require('vm');
 const DATA_TYPE_LOOKUP = [ Int32Array, Int16Array, Int8Array, Uint32Array, Uint16Array, Uint8Array, Float32Array, Float64Array, StringArray ];
 const ENCODE_OPTIMIZATION_FN = [];
 const DECODE_OPTIMIZATION_FN = [];
+const DATA_VERSION = 7;
 
 function typeOptimizedFunction(cache, index, originalFn) {
   // v8 optimization does quite poorly if different array types
@@ -23,11 +24,16 @@ module.exports = {
   encode: (arr)  => {
     let ResultType = inferArrayType(arr),
         resultTypeIndex = DATA_TYPE_LOOKUP.indexOf(ResultType);
-    return typeOptimizedFunction(ENCODE_OPTIMIZATION_FN, resultTypeIndex, encode)(arr, ResultType, resultTypeIndex);
+    return typeOptimizedFunction(ENCODE_OPTIMIZATION_FN, resultTypeIndex, encode)(DATA_VERSION, arr, ResultType, resultTypeIndex);
   },
   decode: (buffer) => {
-    var arrayTypeIndex = buffer.readUInt8(4),
+    var dataVersion = buffer.readUInt8(0),
+        arrayTypeIndex = buffer.readUInt8(1),
         hasLUT = false;
+
+    if (DATA_VERSION !== dataVersion) {
+      throw 'INVALID';
+    } 
 
     if (arrayTypeIndex & 128) {
       hasLUT = true;
@@ -36,6 +42,6 @@ module.exports = {
 
     var ArrayType = DATA_TYPE_LOOKUP[arrayTypeIndex];
 
-    return typeOptimizedFunction(DECODE_OPTIMIZATION_FN, arrayTypeIndex, decode)(buffer, hasLUT, ArrayType);
+    return typeOptimizedFunction(DECODE_OPTIMIZATION_FN, buffer.readUInt16LE(1), decode)(buffer, hasLUT, ArrayType);
   }
 };
