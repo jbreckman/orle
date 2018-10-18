@@ -31,12 +31,50 @@ Obviously your results may vary.  If you have a large array with entirely non-re
 # Format
 The binary format is pretty simple:
 
-| # of bytes| Purpose| Sample Value|
-|--------------------------------------------------------|---------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1| Data Version| 7|
-| 1| Data Type/Lookup Table Flag| The first 7 bits are an unsigned int representing different data formats.  Possible formats are: 0: Int32 1: Int16 2: Int8 3: Uint32 4: Uint16 5: Uint8 6: Float32 7: Float64 8: String  If the last bit is set, that indicates that a lookup table is present|
-| 1| The size of each "run" value| Unsigned int.   0: Int32 1: Int16 2: Int8|
-| <size of each run value>*<number of distinct runs + 1> | Store each set of runs of values| Positive values indicates that the value is repeated that number of times.  Negative values indicates that there is a run of distinct values.  0 indicates there are no more runs defined|
-| 1| The number of items in the LUT (if the LUT bit was set) | 12|
-| <size of each LUT value>*<number of items in LUT>| Actual lookup table values| new Uint16Array([360,120,30])|
-| <size of each value>*<number of values stored>| Actual payload|  Important notes: The order here is very important and has to map to the runs previously defined.  If a run is "positive" then the item should only appear once here.  Note on strings: Strings are stored as a Uint32LE number representing followed by that number of bytes of a JSON representation of the string array.  Note on Lookup Tables: If a lookup table is being used, the size of each value will be 1 and it will be a Uint8 value representing the value to use from the lookup table. |
+### Data Version
+**Bytes**: 1
+**Sample Value**: 7
+
+
+### Data Type/Lookup Table Flag
+**Bytes**: 1
+**Sample Value**: The first 7 bits are an unsigned int representing different data formats.  Possible formats are: 
+* 0: Int32 
+* 1: Int16 
+* 2: Int8 
+* 3: Uint32 
+* 4: Uint16 
+* 5: Uint8 
+* 6: Float32 
+* 7: Float64 
+* 8: String  
+
+If the last bit is set, that indicates that a lookup table is present
+
+### Run Value Size
+**Bytes**: 1
+**Sample Value**: The size of each "run" value.  Unsigned 8 bit int:
+* 0: Int32 
+* 1: Int16 
+* 2: Int8 
+
+### Runs
+**Bytes**: `size-of-each-run-value * (number-of-distinct-runs+1)`
+**Sample Value**: Store each set of run values.  Positive values indicates that the value is repeated that number of times.  Negative values indicates that there is a run of distinct values.  0 indicates there are no more runs defined
+
+### Lookup Table Length
+**Bytes**: 0 or 1
+**Sample Value**: If the lookup table bit was set, this indicates how many items are in the LUT (max of 256)
+
+### Lookup Table
+**Bytes**: `size-of-each-LUT-value * number-of-items-in-LUT`
+**Sample Value**: The data is serialized flat and is obviously variable length.  There are a maximum of 256 values in the lookup table.  If a Lookup table is used, the payload items are serialized as Uint8s indicating the index into this array that they map to
+
+### Payload
+**Bytes**: `size-of-each-value * number-of-values-stored`
+**Sample Value**: The actual payload.  Important notes:
+The order here is very important and has to map to the runs previously defined.  If a run is "positive" then the item should only appear once here.  
+**Note on strings:** Strings are stored as a Uint32LE number representing followed by that number of bytes of a JSON representation of the string array.  
+**Note on Lookup Tables:** If a lookup table is being used, the size of each value will be 1 and it will be a Uint8 value representing the value to use from the lookup table.
+
+
