@@ -79,5 +79,3 @@ If the last bit is set, that indicates that a lookup table is present
 The order here is very important and has to map to the runs previously defined.  If a run is "positive" then the item should only appear once here.  
 **Note on strings:** Strings are stored as a Uint32LE number representing followed by that number of bytes of a JSON representation of the string array.  
 **Note on Lookup Tables:** If a lookup table is being used, the size of each value will be 1 and it will be a Uint8 value representing the value to use from the lookup table.
-
-
