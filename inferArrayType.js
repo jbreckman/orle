@@ -15,7 +15,7 @@ module.exports = function inferArrayType(arr) {
   for (var i = 0; i < arr.length; i++) {
     let v = arr[i];
     if (!hasNegative && v < 0) hasNegative = true;
-    if (!hasDecimal && !Number.isInteger(v)) hasDecimal = true;
+    if (!hasDecimal && v && !Number.isInteger(v)) hasDecimal = true;
     if (!hasString && typeof v === 'string') hasString = true;
     if (v > largest) largest = v;
     if (v < smallest) smallest = v;

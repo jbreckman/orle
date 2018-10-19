@@ -25,6 +25,24 @@ t.test('encode/decode', t => {
   t.test('run, mix, run', t => confirm(t, [1,1,1,1,1,1,2,3,4,5,2,2,2,2,2,2,2], 6, 1, 3));
   t.test('typed arrays', t => confirm(t, new Int32Array([1,1,1,1,1,1,2,3,4,5,2,2,2,2,2,2,2]), 6, 4, 3));
   t.test('unsigned typed arrays', t => confirm(t, new Uint32Array([1,1,1,1,1,1,2,3,4,5,2,2,2,2,2,2,2]), 6, 4, 3));
+
+  t.end();
+});
+
+t.test('null/undefined', t => {
+
+  function confirm(t, arr, itemCount, itemSize, transitions, transitionSize) {
+    transitionSize = transitionSize || 1;
+    var encoded = orle.encode(arr);
+    var expectedSize = 3 + itemCount*itemSize + (transitions+1)*transitionSize;
+    t.same(encoded.length, expectedSize, 'correct size');
+    t.same([...orle.decode(encoded)], [...arr.map(d => d || 0)], 'correct values');
+    t.end();
+  }
+
+  // if an array is otherwise a number array, make sure null/undefined get treated like 0s
+  t.test('test null', t => confirm(t, [1,2,3,4,5,null], 6, 1, 1));
+  t.test('test undefined', t => confirm(t, [1,2,3,4,5,undefined], 6, 1, 1));
   t.end();
 });
 
