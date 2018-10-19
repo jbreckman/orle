@@ -20,6 +20,9 @@ const orle = require('orle');
 const buffer = orle.encode(new Int8Array([1,1,1,1,1,1,5,6,1,1,1,1,1,1,1,1,1]));
 ```
 
+### Notes
+This package primarily optimizes typed arrays, which don't support `null` or `undefined` as elements.  `null` or `undefined` get coerced to 0 when encoding.
+
 ## Decoding
 Pass a buffer to `decode` and you will get back a typed array. 
 
