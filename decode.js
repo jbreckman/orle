@@ -1,5 +1,5 @@
 module.exports = function decode() {
-  return (buffer, hasLUT, ArrayType) => {
+  return async (buffer, hasLUT, ArrayType, isGzipped, gunzipPromise) => {
     let bytesPerElement = ArrayType.BYTES_PER_ELEMENT,
         runsType = buffer.readUInt8(2),   // find the "runs" length type
         FinalType = ArrayType,
@@ -50,6 +50,12 @@ module.exports = function decode() {
       buffer = buffer.slice(1 + (lut.bytes || (bytesPerElement * lut.length)));
       ArrayType = Uint8Array;
       bytesPerElement = 1;
+    }
+
+    if (isGzipped) {
+      let gzipBufferSize = buffer.readUInt32LE(0);
+      let gzippedBuffer = buffer.slice(4, 4+gzipBufferSize);
+      buffer = await gunzipPromise(gzippedBuffer);
     }
 
     // actually decode the runs

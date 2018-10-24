@@ -3,12 +3,12 @@ const orle = require('./index');
 
 t.test('encode/decode', t => {
 
-  function confirm(t, arr, itemCount, itemSize, transitions, transitionSize) {
+  async function confirm(t, arr, itemCount, itemSize, transitions, transitionSize) {
     transitionSize = transitionSize || 1;
-    var encoded = orle.encode(arr);
+    var encoded = await orle.encode(arr);
     var expectedSize = 3 + itemCount*itemSize + (transitions+1)*transitionSize;
     t.same(encoded.length, expectedSize, 'correct size');
-    t.same([...orle.decode(encoded)], [...arr], 'correct values');
+    t.same([...await orle.decode(encoded)], [...arr], 'correct values');
     t.end();
   }
 
@@ -31,12 +31,12 @@ t.test('encode/decode', t => {
 
 t.test('null/undefined', t => {
 
-  function confirm(t, arr, itemCount, itemSize, transitions, transitionSize) {
+  async function confirm(t, arr, itemCount, itemSize, transitions, transitionSize) {
     transitionSize = transitionSize || 1;
-    var encoded = orle.encode(arr);
+    var encoded = await orle.encode(arr);
     var expectedSize = 3 + itemCount*itemSize + (transitions+1)*transitionSize;
     t.same(encoded.length, expectedSize, 'correct size');
-    t.same([...orle.decode(encoded)], [...arr.map(d => d || 0)], 'correct values');
+    t.same([...await orle.decode(encoded)], [...arr.map(d => d || 0)], 'correct values');
     t.end();
   }
 
@@ -48,13 +48,13 @@ t.test('null/undefined', t => {
 
 t.test('string encode/decode', t => {
 
-  function confirm(t, arr, itemCount, totalItemSize, transitions, transitionSize) {
+  async function confirm(t, arr, itemCount, totalItemSize, transitions, transitionSize) {
     transitionSize = transitionSize || 1;
-    var encoded = orle.encode(arr);
+    var encoded = await orle.encode(arr);
 
     var expectedSize = 3 /* header size */ + 4 /* length of string payload */ + itemCount*3 /* handle "", between elements */ + totalItemSize + 2 /* [] before and after */ - 1 /* last , isn't there */ + (transitions+1)*transitionSize /* each transition has a 4 byte length, 4 byte count, and 2 bytes for [] */;
     t.same(encoded.length, expectedSize, 'correct size');
-    t.same([...orle.decode(encoded)], [...arr], 'correct values');
+    t.same([...await orle.decode(encoded)], [...arr], 'correct values');
     t.end();
   }
 
@@ -87,11 +87,11 @@ t.test('string lookup tables', t => {
         S4 = '',
         S4_LENGTH = S4.length;
 
-  function confirm(t, arr, itemCount, totalItemSize, totalElements, transitions, transitionSize) {
-    var encoded = orle.encode(arr);
+  async function confirm(t, arr, itemCount, totalItemSize, totalElements, transitions, transitionSize) {
+    var encoded = await orle.encode(arr);
     var expectedSize = 3 /* header size */ + 1 /* LUT length */ + 4 /* length of string payload */ + totalItemSize + itemCount*3 /* handle "", between elements */ + 2 /* [] before and after */ - 1 /* last , isn't there */ + (transitions+1)*transitionSize /* each transition has a 4 byte length, 4 byte count, and 2 bytes for [] */ + totalElements;
     t.same(encoded.length, expectedSize, `correct size (${expectedSize})`);
-    t.same([...orle.decode(encoded)], [...arr], 'correct values');
+    t.same([...await orle.decode(encoded)], [...arr], 'correct values');
     t.end();
   }
   function dupeArray(arr, count) {
@@ -111,12 +111,12 @@ t.test('string lookup tables', t => {
 
 t.test('lookup tables', t => {
 
-  function confirm(t, arr, itemCount, itemSize, totalElements, transitions, transitionSize) {
+  async function confirm(t, arr, itemCount, itemSize, totalElements, transitions, transitionSize) {
     transitionSize = transitionSize || 1;
-    var encoded = orle.encode(arr);
+    var encoded = await orle.encode(arr);
     var expectedSize = 3 + 1 + itemCount*itemSize + (transitions+1)*transitionSize + totalElements;
     t.same(encoded.length, expectedSize, `correct size (${expectedSize})`);
-    t.same([...orle.decode(encoded)], [...arr], 'correct values');
+    t.same([...await orle.decode(encoded)], [...arr], 'correct values');
     t.end();
   }
 
@@ -151,33 +151,49 @@ t.test('performance', t => {
     return [].concat.apply([], arr); 
   }
 
-  function timeTestData(t, arr, maxEncodeTime, maxDecodeTime) {
+  async function timeTestData(t, arr, maxEncodeTime, maxDecodeTime, maxGzipEncodeTime, maxGzipDecodeTime) {
     var startTime = new Date().getTime();
-    let encoded = orle.encode(arr);
+    let encoded = await orle.encode(arr, {gzip:false});
     let duration = new Date().getTime() - startTime;
     t.true(duration < maxEncodeTime, `faster than ${maxEncodeTime}ms to encode ${arr.length} (${duration}ms)`);
 
     startTime = new Date().getTime(); 
-    let decoded = orle.decode(encoded);
+    let decoded = await orle.decode(encoded);
     duration = new Date().getTime() - startTime;
     t.true(duration < maxDecodeTime, `faster than ${maxDecodeTime}ms to decode ${arr.length} (${duration}ms) with ${(1-(encoded.length/(decoded.buffer&&decoded.buffer.byteLength)))*100}% compression`);
 
     t.same(decoded.length, arr.length, 'lengths match');
     // it's too slow to check every value, so check 10 values
-    for (var i = 1; i <= 10; i++) {
+    for (let i = 1; i <= 10; i++) {
+      t.same(decoded[i*Math.floor(arr.length / 10)], arr[i*Math.floor(arr.length / 10)], `single value matches (${i})`);
+    }
+
+    startTime = new Date().getTime();
+    encoded = await orle.encode(arr);
+    duration = new Date().getTime() - startTime;
+    t.true(duration < maxGzipEncodeTime, `faster than ${maxEncodeTime}ms to gzip encode ${arr.length} (${duration}ms)`);
+
+    startTime = new Date().getTime(); 
+    decoded = await orle.decode(encoded);
+    duration = new Date().getTime() - startTime;
+    t.true(duration < maxGzipDecodeTime, `faster than ${maxDecodeTime}ms to gzip decode ${arr.length} (${duration}ms) with ${(1-(encoded.length/(decoded.buffer&&decoded.buffer.byteLength)))*100}% compression`);
+
+    t.same(decoded.length, arr.length, 'lengths match');
+    // it's too slow to check every value, so check 10 values
+    for (let i = 1; i <= 10; i++) {
       t.same(decoded[i*Math.floor(arr.length / 10)], arr[i*Math.floor(arr.length / 10)], `single value matches (${i})`);
     }
     t.end();
   }
 
-  t.test('large encoding/decoding', t => timeTestData(t, buildTestData(100, 5000, 500), 150, 50));
-  t.test('large encoding/decoding known data format', t => timeTestData(t, new Uint32Array(buildTestData(100, 5000, 500)), 100, 50));
-  t.test('very large encoding/decoding known data format one big run', t => timeTestData(t, new Uint32Array(buildTestData(1, 0, 5000000)), 150, 50));
-  t.test('very large encoding/decoding known data format', t => timeTestData(t, new Uint32Array(buildTestData(1000, 5000, 500)), 150, 50));
-  t.test('very large mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 50000, 0)), 150, 50));
-  t.test('medium mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 500, 50)), 30, 10));
-  t.test('pathological case', t => timeTestData(t, new Uint32Array(buildTestData(10000, 2, 3)), 100, 50));
-  t.test('one long run of strings', t => timeTestData(t, buildStringTestData(1, 0, 100000), 250, 100));
-  t.test('strings mixed', t => timeTestData(t, buildStringTestData(100, 500, 500), 150, 50));
+  t.test('large encoding/decoding', t => timeTestData(t, buildTestData(100, 5000, 500), 150, 50, 150, 50));
+  t.test('large encoding/decoding known data format', t => timeTestData(t, new Uint32Array(buildTestData(100, 5000, 500)), 100, 50, 100, 50));
+  t.test('very large encoding/decoding known data format one big run', t => timeTestData(t, new Uint32Array(buildTestData(1, 0, 5000000)), 150, 50, 6000, 250));
+  t.test('very large encoding/decoding known data format', t => timeTestData(t, new Uint32Array(buildTestData(1000, 5000, 500)), 150, 50, 250, 250));
+  t.test('very large mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 50000, 0)), 150, 50, 250, 50));
+  t.test('medium mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 500, 50)), 30, 10, 60, 10));
+  t.test('pathological case', t => timeTestData(t, new Uint32Array(buildTestData(10000, 2, 3)), 100, 50, 100, 50));
+  t.test('one long run of strings', t => timeTestData(t, buildStringTestData(1, 0, 100000), 250, 100, 250, 100));
+  t.test('strings mixed', t => timeTestData(t, buildStringTestData(100, 500, 500), 150, 50, 150, 50));
   t.end();
 });

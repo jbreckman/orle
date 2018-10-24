@@ -1,5 +1,5 @@
 module.exports = function encode() {
-  return (version, arr, ResultType, resultTypeIndex) => {
+  return async (version, arr, ResultType, resultTypeIndex, gzipPromise, options) => {
     const MAX_LOOKUP_SIZE = 255;
     let result = [new Uint8Array([version])];
     
@@ -54,7 +54,7 @@ module.exports = function encode() {
         arr = new ResultType([...arr]);
       }
     }
-
+    
     let runs = [],
         valueArrays = [],
         maxRunLength = 0,
@@ -111,6 +111,43 @@ module.exports = function encode() {
     // indicates the run lengths are done
     runs.push(0);
 
+    let finalValueBuffer = null;
+    if (ResultType.join) {
+      finalValueBuffer = Buffer.from(ResultType.join(valueArrays).buffer);
+    }
+    else {
+      finalValueBuffer = Buffer.concat(valueArrays.map(v => Buffer.from(v.buffer)));
+    }
+    
+    // check to see if we should gzip the payload
+    if (options.gzip !== false) {
+      let originalBuffer = Buffer.from(arr.buffer);
+      let originalBufferGZipped = await gzipPromise(originalBuffer);
+      let valueArraysGzipped = await gzipPromise(finalValueBuffer);
+      let threshold = 2000; // configurable?
+
+      if ((originalBufferGZipped.length < valueArraysGzipped.length - threshold) &&
+          (originalBufferGZipped.length < finalValueBuffer.length - threshold)) {
+
+        // use one long run and skip most of the rle
+        runs = [-arr.length, 0];
+        minRunLength = -arr.length;
+        maxRunLength = 0;
+        finalValueBuffer = Buffer.concat([Buffer.from(new Uint32Array([originalBufferGZipped.length]).buffer), originalBufferGZipped]);
+
+        // the result type is the second element in the array and is 1 uint8, so set the second highest bit indicating it's gzipped
+        result[1][0] |= 64;
+      }
+      else if (valueArraysGzipped.length < finalValueBuffer.length - threshold) {
+
+        // still use runs but gzip
+        finalValueBuffer = Buffer.concat([Buffer.from(new Uint32Array([valueArraysGzipped.length]).buffer), valueArraysGzipped]);
+
+        // the result type is the second element in the array and is 1 uint8, so set the second highest bit indicating it's gzipped
+        result[1][0] |= 64;
+      }
+    }
+
     // figure out the data type to store our run lengths
     if (minRunLength < -32768 || maxRunLength >= 32768) {
       result.push(new Uint8Array([0])); // 32 bit array
@@ -130,12 +167,7 @@ module.exports = function encode() {
       result.push(lookupTableArray);
     }
 
-    if (ResultType.join) {
-      result.push(ResultType.join(valueArrays));
-    }
-    else {
-      result = result.concat(valueArrays);
-    }
+    result.push(new Uint8Array(finalValueBuffer));
 
     return Buffer.concat(result.map(d => Buffer.from(d.buffer)));
   };
