@@ -26,10 +26,10 @@ function typeOptimizedFunction(cache, index, originalFn) {
 }
 
 module.exports = {
-  encode: (arr, options)  => {
+  encode: (arr, options, debugInfo)  => {
     let ResultType = inferArrayType(arr),
         resultTypeIndex = DATA_TYPE_LOOKUP.indexOf(ResultType);
-    return typeOptimizedFunction(ENCODE_OPTIMIZATION_FN, resultTypeIndex, encode)(DATA_VERSION, arr, ResultType, resultTypeIndex, gzipPromise, options || {});
+    return typeOptimizedFunction(ENCODE_OPTIMIZATION_FN, resultTypeIndex, encode)(DATA_VERSION, arr, ResultType, resultTypeIndex, gzipPromise, options || {}, debugInfo);
   },
   decode: (buffer) => {
     var dataVersion = buffer.readUInt8(0),

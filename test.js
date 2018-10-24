@@ -5,10 +5,14 @@ t.test('encode/decode', t => {
 
   async function confirm(t, arr, itemCount, itemSize, transitions, transitionSize) {
     transitionSize = transitionSize || 1;
-    var encoded = await orle.encode(arr);
+    var debug = {};
+    var encoded = await orle.encode(arr, null, debug);
     var expectedSize = 3 + itemCount*itemSize + (transitions+1)*transitionSize;
     t.same(encoded.length, expectedSize, 'correct size');
     t.same([...await orle.decode(encoded)], [...arr], 'correct values');
+    t.same(true, !debug.lut, 'do not use lookup table');
+    t.same(true, !debug.gzip, 'do not use gzip');
+    t.same(itemCount, debug.valueArrayLength, 'correct value array length');
     t.end();
   }
 
@@ -113,10 +117,17 @@ t.test('lookup tables', t => {
 
   async function confirm(t, arr, itemCount, itemSize, totalElements, transitions, transitionSize) {
     transitionSize = transitionSize || 1;
-    var encoded = await orle.encode(arr);
+    var debug = {};
+    var encoded = await orle.encode(arr, null, debug);
     var expectedSize = 3 + 1 + itemCount*itemSize + (transitions+1)*transitionSize + totalElements;
     t.same(encoded.length, expectedSize, `correct size (${expectedSize})`);
     t.same([...await orle.decode(encoded)], [...arr], 'correct values');
+
+    t.same(true, debug.usingLUT, 'use lookup table');
+    t.same(itemCount, debug.lut.length, 'use lookup table');
+    t.same(true, !debug.gzip, 'do not use gzip');
+    t.same(totalElements, debug.valueArrayLength, 'correct value array length');
+
     t.end();
   }
 
@@ -151,12 +162,16 @@ t.test('performance', t => {
     return [].concat.apply([], arr); 
   }
 
-  async function timeTestData(t, arr, maxEncodeTime, maxDecodeTime, maxGzipEncodeTime, maxGzipDecodeTime) {
+  async function timeTestData(t, arr, maxEncodeTime, maxDecodeTime, maxGzipEncodeTime, maxGzipDecodeTime, noGzip) {
+    var debug = {};
     var startTime = new Date().getTime();
-    let encoded = await orle.encode(arr, {gzip:false});
+    let encoded = await orle.encode(arr, {gzip:false}, debug);
     let duration = new Date().getTime() - startTime;
     t.true(duration < maxEncodeTime, `faster than ${maxEncodeTime}ms to encode ${arr.length} (${duration}ms)`);
+    t.same(true, !debug.gzip, 'do not use gzip');
 
+    let nonGzippedEncodedLength = encoded.length;
+    
     startTime = new Date().getTime(); 
     let decoded = await orle.decode(encoded);
     duration = new Date().getTime() - startTime;
@@ -168,15 +183,24 @@ t.test('performance', t => {
       t.same(decoded[i*Math.floor(arr.length / 10)], arr[i*Math.floor(arr.length / 10)], `single value matches (${i})`);
     }
 
+    debug = {};
     startTime = new Date().getTime();
-    encoded = await orle.encode(arr);
+    encoded = await orle.encode(arr, null, debug);
     duration = new Date().getTime() - startTime;
     t.true(duration < maxGzipEncodeTime, `faster than ${maxEncodeTime}ms to gzip encode ${arr.length} (${duration}ms)`);
+    t.same(!!noGzip, !debug.gzip, 'use gzip');
 
     startTime = new Date().getTime(); 
     decoded = await orle.decode(encoded);
     duration = new Date().getTime() - startTime;
     t.true(duration < maxGzipDecodeTime, `faster than ${maxDecodeTime}ms to gzip decode ${arr.length} (${duration}ms) with ${(1-(encoded.length/(decoded.buffer&&decoded.buffer.byteLength)))*100}% compression`);
+
+    if (!noGzip) {
+      t.true(nonGzippedEncodedLength > encoded.length, 'Make sure the gzipped is at least smaller');
+    }
+    else {
+      t.same(nonGzippedEncodedLength, encoded.length, 'Make sure the gzipped is same size');
+    }
 
     t.same(decoded.length, arr.length, 'lengths match');
     // it's too slow to check every value, so check 10 values
@@ -190,7 +214,7 @@ t.test('performance', t => {
   t.test('large encoding/decoding known data format', t => timeTestData(t, new Uint32Array(buildTestData(100, 5000, 500)), 100, 50, 100, 50));
   t.test('very large encoding/decoding known data format one big run', t => timeTestData(t, new Uint32Array(buildTestData(1, 0, 5000000)), 150, 50, 6000, 250));
   t.test('very large encoding/decoding known data format', t => timeTestData(t, new Uint32Array(buildTestData(1000, 5000, 500)), 150, 50, 250, 250));
-  t.test('very large mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 50000, 0)), 150, 50, 250, 50));
+  t.test('very large mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 50000, 0)), 150, 50, 250, 50, true));
   t.test('medium mostly long runs', t => timeTestData(t, new Uint32Array(buildTestData(100, 500, 50)), 30, 10, 60, 10));
   t.test('pathological case', t => timeTestData(t, new Uint32Array(buildTestData(10000, 2, 3)), 100, 50, 100, 50));
   t.test('one long run of strings', t => timeTestData(t, buildStringTestData(1, 0, 100000), 250, 100, 250, 100));
