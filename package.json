@@ -1,6 +1,6 @@
 {
   "name": "orle",
-  "version": "2.0.1",
+  "version": "3.0.0",
   "description": "RLE array encoder/decoder",
   "main": "index.js",
   "scripts": {

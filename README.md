@@ -8,27 +8,29 @@
 Using `orle` is simple.  There are two exposed methods: `encode` and `decode`.
 
 ## Encoding
-If you pass a typed array (such as `Uint16Array` or `Float32Array`) to `encode`, that data type is used.  If you pass a non-typed array, it will try to find the most compact data type possible to encode the data.  Note: if decimals are found, it will use Float64Array to preserve precision.
+If you pass a typed array (such as `Uint16Array` or `Float32Array`) to `encode`, that data type is used.  `encode` returns a promise with an encoded buffer.  If you pass a non-typed array, it will try to find the most compact data type possible to encode the data.  Note: if decimals are found, it will use Float64Array to preserve precision.
 
 ```
 const orle = require('orle');
-const buffer = orle.encode([1,1,1,1,1,1,5,6,1,1,1,1,1,1,1,1,1]);
+const buffer = await orle.encode([1,1,1,1,1,1,5,6,1,1,1,1,1,1,1,1,1]);
 ```
 or
 ```
 const orle = require('orle');
-const buffer = orle.encode(new Int8Array([1,1,1,1,1,1,5,6,1,1,1,1,1,1,1,1,1]));
+const buffer = await orle.encode(new Int8Array([1,1,1,1,1,1,5,6,1,1,1,1,1,1,1,1,1]));
 ```
+
+If it's advantageous to gzip part of the payload, it will do so automatically.  You can opt out of this by passing options to encode `orle.encode(arr, { gzip: false })`.
 
 ### Notes
 This package primarily optimizes typed arrays, which don't support `null` or `undefined` as elements.  `null` or `undefined` get coerced to 0 when encoding.
 
 ## Decoding
-Pass a buffer to `decode` and you will get back a typed array. 
+Pass a buffer to `decode` and you will get back a promise of a typed array. 
 
 ```
 const orle = require('orle');
-const arr = orle.decode(buffer);
+const arr = await orle.decode(buffer);
 ```
 
 # Compression
@@ -56,6 +58,7 @@ The binary format is pretty simple:
 * 8: String  
 
 If the last bit is set, that indicates that a lookup table is present
+If the second last bit is set, that indicates that the `Payload` is gzipped
 
 ### Run Value Size
 **Bytes**: 1
@@ -75,6 +78,10 @@ If the last bit is set, that indicates that a lookup table is present
 ### Lookup Table
 **Bytes**: `size-of-each-LUT-value * number-of-items-in-LUT`
 **Sample Value**: The data is serialized flat and is obviously variable length.  There are a maximum of 256 values in the lookup table.  If a Lookup table is used, the payload items are serialized as Uint8s indicating the index into this array that they map to
+
+### GZip Payload
+**Bytes**: A 4 byte UInt32 followed by a gzip payload
+**Note**: The `Payload` is gzipped if the second bit of the data type lookup is set.  If the payload is gzipped, the rest of the storage format remains the same, except it is gzipped/gunzipped first.
 
 ### Payload
 **Bytes**: `size-of-each-value * number-of-values-stored`
